@@ -3,9 +3,11 @@
 #include <cmath>
 #include <vector>
 #include<stdlib.h>
+#include"/opt/software/nvidia/cuda-8.0/include/cuda.h"
 
 using namespace std;
 #define N 1000
+#define threads 10
 
 int map[N][N];
 int heightOfRobot = 50;
@@ -13,6 +15,22 @@ int heightOfStantion = 120;
 int xStatic = 66;
 int yStatic = 55;
 
+
+--global__ void findLine(int** a)
+{
+ int tid = blockIdx.x;
+	
+    for(int i=0; i<N; i++)
+	{
+	 if(tid < threads)
+	 {
+	   bresenhamLine(xStatic, yStatic, tid,0);
+	   bresenhamLine(xStatic, yStatic, tid, N-1);
+           bresenhamLine(xStatic, yStatic, 0, tid);
+           bresenhamLine(xStatic, yStatic, N-1, tid);
+	 }
+       }
+}
 
 void findDarkArea(vector<pair<int, int> >& coord, vector<pair<int, int> >& versities)
 {
@@ -122,14 +140,13 @@ int main()
    
     map[xStatic][yStatic] = heightOfStantion;
 
-    for(int i=0; i<N; i++)
+	int** dev_a;
+	cudaMalloc((void***) &dev_a, threads*sizeof(int));
+	for(int i=0; i<threads; i++)
 	{
-	  bresenhamLine(xStatic, yStatic, i,0);
-	  bresenhamLine(xStatic, yStatic, i, N-1);
-          bresenhamLine(xStatic, yStatic, 0, i);
-          bresenhamLine(xStatic, yStatic, N-1, i);
+		cudaMalloc((void**) &dev_a[i], threads*sizeof(int)); 
 	}
-
+	
 	for(int i=0; i< N; i++)
 	{
 		for(int j=0; j< N; j++)
