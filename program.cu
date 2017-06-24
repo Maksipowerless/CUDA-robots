@@ -7,21 +7,12 @@
 #include <stdio.h>
 
 using namespace std;
-#define N 100
-#define threads 16
+#define N 1000
+#define threads 111
+#define blocks 12
 
-__device__ int MAP[N][N];
-
-__global__ void fillMap(int map[N][N])
-{
-	for(int i=0; i<N; i++)
-	{
-		for(int j=0; j<N; j++)
-		{
-		   MAP[i][j] = map[i][j];
-		}
-	}
-}
+__device__ int MAP[N][N];//карта на GPU
+__device__ int SUM = 4*N-4;//количество крайних точек
 
 __device__ void bresenhamLine(int x1, int y1, int x2, int y2)
 {
@@ -102,7 +93,7 @@ __device__ void bresenhamLine(int x1, int y1, int x2, int y2)
         {
             if(heightOfVersities[i] + heightOfRobot < tempHeight)
             {
-                MAP[xCoord[i]][yCoord[i]] = 999;
+                MAP[xCoord[i]][yCoord[i]] = -999;
 
                 numOfVersities[i]=-999;
                 heightOfVersities[i]=-999;
@@ -165,18 +156,39 @@ __device__ void bresenhamLine(int x1, int y1, int x2, int y2)
 __global__ void findLine()
 {
 
- int xStatic = 66;
- int yStatic = 55;
- int tid = blockIdx.x;
-	
- bresenhamLine(xStatic, yStatic, tid,0);
- bresenhamLine(xStatic, yStatic, tid, N-1);
- bresenhamLine(xStatic, yStatic, 0, tid);
- bresenhamLine(xStatic, yStatic, N-1, tid);
- 
+ int xStatic = 500;
+ int yStatic = 500;
+ int tid = threadIdx.x;
+ int bid = blockIdx.x;
+for(int i = (bid*threads+tid)*SUM/(threads*blocks); i < (bid*threads+tid+1)*SUM/(threads*blocks); i++)
+{ 
+	int column = 0;
+	int str = 0;
 
+	if(i <= SUM/4)
+	{
+	  column = i;
+	}
+	else if(i <=  SUM/2)
+	{
+	  column = N-1;
+	  str = i-(N-1);
+	}
+	else if(i <= 3*SUM/4)
+	{
+	  str = N-1;
+	  column = N-1-i+2*(N-1);
+	}
+	else
+	{
+	   str = i-3*(N-1);
+	}
 	
-       
+
+       bresenhamLine(xStatic, yStatic, str, column);
+	//MAP[str][column]=0;
+}
+ //  __syncthreads();
 }
 
 
@@ -184,22 +196,12 @@ int map[N][N];
  
 int main()
 {
- int heightOfStantion = 120;
- int xStatic = 66;
- int yStatic = 55;
-
     srand(time(0));
        for(int i=0; i<N; i++)
         for(int j=0; j<N; j++)
             map[i][j] = rand() % 80 +5;
    
-  void* a_DATA;
-  cudaGetSymbolAddress(&a_DATA, MAP);
-  cudaMemcpy(a_DATA, map, sizeof(map), cudaMemcpyHostToDevice);
-  findLine <<<N,N>>>();
-  cudaMemcpy(map, a_DATA, sizeof(map), cudaMemcpyDeviceToHost);   
-
-	
+/*
 for(int i=0; i< N; i++)
 	{
 		for(int j=0; j< N; j++)
@@ -209,6 +211,50 @@ for(int i=0; i< N; i++)
 		}
 		printf("\n");
 	}
+  printf("\n");
+*/
+  cudaSetDevice(0);
 
+ cudaEvent_t timStart, timCopyTo, timStopWork, timCopyFrom;
+ cudaEventCreate(&timStart);
+ cudaEventCreate(&timCopyTo);
+ cudaEventCreate(&timStopWork);
+ cudaEventCreate(&timCopyFrom);
+
+ cudaEventRecord(timStart);
+ 	
+  void* a_DATA;
+  cudaGetSymbolAddress(&a_DATA, MAP);
+  cudaMemcpy(a_DATA, map, sizeof(map), cudaMemcpyHostToDevice);
+
+  cudaEventRecord(timCopyTo);
+
+  dim3 numThreads = dim3(threads);
+  dim3 numBlocks = dim3(blocks);
+
+  findLine<<<numBlocks, numThreads>>>();
+
+  cudaEventRecord(timStopWork);
+
+  cudaMemcpy(map, a_DATA, sizeof(map), cudaMemcpyDeviceToHost);   
+
+  cudaEventRecord(timCopyFrom);
+/*
+for(int i=0; i< N; i++)
+	{
+		for(int j=0; j< N; j++)
+		{
+			printf("%d",map[i][j]);
+			printf(" ");
+		}
+		printf("\n");
+	}
+*/
+float t1,t2,t3;
+cudaEventElapsedTime(&t1,timStart, timCopyTo);
+cudaEventElapsedTime(&t2, timCopyTo,timStopWork);
+cudaEventElapsedTime(&t3,timStopWork, timCopyFrom);
+
+cout<< "\n"<<t1 << " "<<t2<<" "<< t3 << "\n";
     return 0;
 }
