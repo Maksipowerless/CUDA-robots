@@ -8,8 +8,10 @@
 
 using namespace std;
 #define N 1000
-#define threads 111
-#define blocks 12
+#define threads 74  
+#define blocks 54
+#define X 500
+#define Y 500git 
 
 __device__ int MAP[N][N];//карта на GPU
 __device__ int SUM = 4*N-4;//количество крайних точек
@@ -29,16 +31,8 @@ __device__ void bresenhamLine(int x1, int y1, int x2, int y2)
     int heightOfVersities[1000];//массив с высотами точек
     int xCoord[1000];//массив с x координатами
     int yCoord[1000];//массив с y координатами
-
-    for(int i=0; i< 1000; i++)
-    {
-        numOfVersities[i]=-999;
-        heightOfVersities[i]=-999;
-        xCoord[i]=-999;
-        yCoord[i]=-999;
-    }
-
-    while(x1 != x2 || y1 != y2)
+    
+      while(x1 != x2 || y1 != y2)
     {
         count++;
         const int error2 = error * 2;
@@ -65,89 +59,50 @@ __device__ void bresenhamLine(int x1, int y1, int x2, int y2)
     int tempHeight = 0;
     int tempX = 0;
     int tempY = 0;
+    int sizeOfLine = count;//кол-во точек в прямой
+    count = 0;//количество удаленных точек
+    int delElement = -99;//признак удаленного элемента в массиве
 
-    while(numOfVersities[0] != -999)
+    while(count != sizeOfLine)
     {
-        int number  = 0;//номер вершины в массивеm, через которую удаляют невидимые вершины
+        int number  = 0;//номер вершины в массиве, через которую удаляют невидимые вершины
         //поиск точки с меньшим полярным углом от стационарной
-        for(int i=0; i<count-1; i++)
+        for(int i=0; i < sizeOfLine; i++)
         {
-            float A = numOfVersities[i];
-            float B = sqrtf(numOfVersities[i]*numOfVersities[i] + 
-                          (heightOfStantion - heightOfVersities[i])*(heightOfStantion - heightOfVersities[i]));
-            float temp = 0;
-            temp = A/B;
-            if(temp > alpha)
+            if(numOfVersities[i] != delElement)
             {
-                alpha = temp;
-                tempNumber = numOfVersities[i];
-                tempHeight = heightOfVersities[i];
-                tempX = xCoord[i];
-                tempY = yCoord[i];
-                number = i;
+                float A = numOfVersities[i];
+                float B = sqrtf(numOfVersities[i]*numOfVersities[i] + 
+                          (heightOfStantion - heightOfVersities[i])*(heightOfStantion - heightOfVersities[i]));
+                float temp = A/B;
+                if(temp > alpha)
+                {
+                    alpha = temp;
+                    tempNumber = numOfVersities[i];
+                    tempHeight = heightOfVersities[i];
+                    tempX = xCoord[i];
+                    tempY = yCoord[i];
+                    number = i;
+                }
             }
         }
 
         //удаление невидимых точек за текущей
-        for(int i = number + 1; numOfVersities[i] != -999; i++)
+        for(int i = number + 1; i < sizeOfLine; i++)
         {
-            if(heightOfVersities[i] + heightOfRobot < tempHeight)
+            if(heightOfVersities[i] != delElement && heightOfVersities[i] + heightOfRobot < tempHeight)
             {
                 MAP[xCoord[i]][yCoord[i]] = -999;
-
-                numOfVersities[i]=-999;
-                heightOfVersities[i]=-999;
-                xCoord[i]=-999;
-                yCoord[i]=-999;
-
-                for(int j=i; j<count-1; j++)
-                {
-                    int temp =  numOfVersities[j];
-                    numOfVersities[j] = numOfVersities[j+1];
-                    numOfVersities[j+1] = temp;
-
-                    temp =  heightOfVersities[j];
-                    heightOfVersities[j] = heightOfVersities[j+1];
-                    heightOfVersities[j+1] = temp;
-
-                    temp =  xCoord[j];
-                    xCoord[j] = xCoord[j+1];
-                    xCoord[j+1] = temp;
-
-                    temp =  yCoord[j];
-                    yCoord[j] = yCoord[j+1];
-                    yCoord[j+1] = temp;
-
-                }
-                count--;
+                numOfVersities[i]= delElement;
+                heightOfVersities[i]= delElement;
+                count++;
             }
         }
 
         //удаление текущей точки
-        numOfVersities[number]=-999;
-        heightOfVersities[number]=-999;
-        xCoord[number]=-999;
-        yCoord[number]=-999;
-
-        for(int j=number; j<count-1; j++)
-        {
-            int temp =  numOfVersities[j];
-            numOfVersities[j] = numOfVersities[j+1];
-            numOfVersities[j+1] = temp;
-
-            temp =  heightOfVersities[j];
-            heightOfVersities[j] = heightOfVersities[j+1];
-            heightOfVersities[j+1] = temp;
-
-            temp =  xCoord[j];
-            xCoord[j] = xCoord[j+1];
-            xCoord[j+1] = temp;
-
-            temp =  yCoord[j];
-            yCoord[j] = yCoord[j+1];
-            yCoord[j+1] = temp;
-
-        }
+        numOfVersities[number]= delElement;
+        heightOfVersities[number]= delElement;
+        count++;
 
         alpha = 0;
     }
@@ -156,8 +111,8 @@ __device__ void bresenhamLine(int x1, int y1, int x2, int y2)
 __global__ void findLine()
 {
 
- int xStatic = 500;
- int yStatic = 500;
+ int xStatic = X;
+ int yStatic = Y;
  int tid = threadIdx.x;
  int bid = blockIdx.x;
 for(int i = (bid*threads+tid)*SUM/(threads*blocks); i < (bid*threads+tid+1)*SUM/(threads*blocks); i++)
@@ -185,8 +140,8 @@ for(int i = (bid*threads+tid)*SUM/(threads*blocks); i < (bid*threads+tid+1)*SUM/
 	}
 	
 
-       bresenhamLine(xStatic, yStatic, str, column);
-	//MAP[str][column]=0;
+      bresenhamLine(xStatic, yStatic, str, column);
+     //MAP[str][column]=0;
 }
  //  __syncthreads();
 }
